@@ -41,5 +41,4 @@ backend/venv/
 *.env.*
 
 # Keep safe templates in repo
-!.env.local.example
-!.env.example
+!frontend/.env.local.example
