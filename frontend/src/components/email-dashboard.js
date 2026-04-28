@@ -1,17 +1,19 @@
 "use client";
 
-import Link from "next/link";
+import EmailCard from "@/components/email-card";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 const INITIAL_PAGE_SIZE = 12;
 const NEXT_PAGE_SIZE = 25;
 const NEW_EMAIL_POLL_MS = 60000;
+const TASK_SYNC_MIN_INTERVAL_MS = 5 * 60 * 1000;
 
 const inboxCache = {
   hasLoaded: false,
   emails: [],
   lastTopEmailId: "",
   updatedAt: 0,
+  lastTaskSyncAt: 0,
 };
 
 export default function EmailDashboard() {
@@ -21,7 +23,43 @@ export default function EmailDashboard() {
   const [isCheckingUpdates, setIsCheckingUpdates] = useState(false);
   const [lastUpdatedAt, setLastUpdatedAt] = useState(0);
   const [error, setError] = useState(null);
+  const [processStatus, setProcessStatus] = useState("");
   const isRefreshingRef = useRef(false);
+  const hasTriggeredInitialProcessRef = useRef(false);
+
+  const processEmailsForTasks = useCallback(async ({ force = false } = {}) => {
+    const now = Date.now();
+    if (!force && inboxCache.lastTaskSyncAt && now - inboxCache.lastTaskSyncAt < TASK_SYNC_MIN_INTERVAL_MS) {
+      setProcessStatus("Task sync is up to date.");
+      return;
+    }
+
+    try {
+      setProcessStatus("Syncing tasks from your latest emails...");
+      const response = await fetch("/api/process-emails?maxResults=12", {
+        method: "GET",
+        cache: "no-store",
+      });
+
+      if (!response.ok) {
+        setProcessStatus("Task sync is unavailable right now.");
+        return;
+      }
+
+      const result = await response.json();
+      const processedNew = result.processed_new || 0;
+      const skippedExisting = result.skipped_existing || 0;
+      const failed = result.failed || 0;
+      const rateLimited = Boolean(result.rate_limited);
+      const suffix = rateLimited ? " Rate limit hit, partial results saved." : "";
+      inboxCache.lastTaskSyncAt = Date.now();
+      setProcessStatus(
+        `Task sync: ${processedNew} new, ${skippedExisting} skipped, ${failed} failed.${suffix}`,
+      );
+    } catch {
+      setProcessStatus("Task sync is unavailable right now.");
+    }
+  }, []);
 
   const refreshInbox = useCallback(async ({ showInitialLoader = false } = {}) => {
     if (isRefreshingRef.current) {
@@ -119,22 +157,34 @@ export default function EmailDashboard() {
 
       if (knownTopId && latestId !== knownTopId) {
         await refreshInbox();
+        await processEmailsForTasks({ force: true });
       }
     } finally {
       setIsCheckingUpdates(false);
     }
-  }, [refreshInbox]);
+  }, [processEmailsForTasks, refreshInbox]);
 
   useEffect(() => {
     if (inboxCache.hasLoaded) {
       setEmails(inboxCache.emails);
       setLastUpdatedAt(inboxCache.updatedAt);
       setIsLoading(false);
+      if (!hasTriggeredInitialProcessRef.current) {
+        hasTriggeredInitialProcessRef.current = true;
+        processEmailsForTasks();
+      }
       return;
     }
 
     refreshInbox({ showInitialLoader: true });
-  }, [refreshInbox]);
+  }, [processEmailsForTasks, refreshInbox]);
+
+  useEffect(() => {
+    if (!isLoading && !hasTriggeredInitialProcessRef.current) {
+      hasTriggeredInitialProcessRef.current = true;
+      processEmailsForTasks();
+    }
+  }, [isLoading, processEmailsForTasks]);
 
   useEffect(() => {
     const intervalId = setInterval(() => {
@@ -149,14 +199,15 @@ export default function EmailDashboard() {
     : "--";
 
   return (
-    <section className="mx-auto w-full max-w-5xl px-6 py-10">
-      <div className="mb-6 rounded-3xl border border-cyan-300/25 bg-gradient-to-r from-blue-700/80 via-blue-600/70 to-cyan-500/70 p-8 text-white shadow-[0_18px_55px_rgba(13,148,255,0.25)]">
-        <h1 className="text-3xl font-semibold">Inbox</h1>
-        <p className="mt-2 text-blue-50/90">Click any email row to read its full content.</p>
+    <section className="mx-auto w-full max-w-6xl px-4 py-8 sm:px-6">
+      <div className="mb-6 rounded-3xl border border-cyan-300/25 bg-gradient-to-r from-blue-700/85 via-sky-700/80 to-cyan-600/75 p-8 text-white shadow-[0_18px_55px_rgba(13,148,255,0.25)]">
+        <h1 className="text-3xl font-semibold">Dashboard Inbox</h1>
+        <p className="mt-2 text-blue-50/90">Your latest emails are listed here, and tasks are extracted automatically in the background.</p>
         <p className="mt-1 text-xs text-blue-100/90">
           Last updated: {lastUpdatedLabel}
           {isCheckingUpdates ? " • Checking for new emails..." : ""}
         </p>
+        {processStatus ? <p className="mt-2 text-xs text-cyan-100/90">{processStatus}</p> : null}
       </div>
 
       {isLoading && (
@@ -176,19 +227,10 @@ export default function EmailDashboard() {
       )}
 
       <div className="overflow-hidden rounded-2xl border border-blue-400/20 bg-slate-900/70 shadow-xl backdrop-blur">
-        {emails.map((email) => (
-          <Link
-            key={email.id}
-            href={`/dashboard/email/${email.id}`}
-            className="block w-full border-b border-blue-400/15 bg-transparent px-5 py-4 text-left transition hover:bg-blue-500/10"
-          >
-            <div className="mb-1 flex items-start justify-between gap-4">
-              <h2 className="line-clamp-1 text-base font-semibold text-slate-100">{email.subject}</h2>
-              <span className="shrink-0 text-xs text-slate-400">{email.date || ""}</span>
-            </div>
-            <p className="line-clamp-1 text-sm text-cyan-200/90">{email.from || "Unknown sender"}</p>
-            <p className="mt-1 line-clamp-1 text-sm text-slate-300">{email.snippet}</p>
-          </Link>
+        {emails.map((email, index) => (
+          <div key={email.id} className={index === emails.length - 1 ? "" : "border-b border-blue-400/15"}>
+            <EmailCard email={email} />
+          </div>
         ))}
       </div>
 

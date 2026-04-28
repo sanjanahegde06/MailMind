@@ -12,8 +12,36 @@ export default function EmailDetailPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
 
+  const emailViewerStyles = `
+    :root { color-scheme: dark; }
+    html, body {
+      margin: 0;
+      padding: 0;
+      background: #020b24 !important;
+      color: #dbeafe;
+      font-family: "Segoe UI", "Noto Sans", sans-serif;
+      line-height: 1.65;
+    }
+    body {
+      padding: 18px;
+    }
+    body[bgcolor], table[bgcolor], td[bgcolor], div[bgcolor] {
+      background: transparent !important;
+    }
+    img, video, table, iframe {
+      max-width: 100% !important;
+    }
+    a {
+      color: #7dd3fc;
+    }
+    pre, code {
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+  `;
+
   const emailHtmlDocument = email?.bodyHtml
-    ? `<!doctype html><html><head><meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" /><base target="_blank" /></head><body>${email.bodyHtml}</body></html>`
+    ? `<!doctype html><html><head><meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" /><base target="_blank" /><style>${emailViewerStyles}</style></head><body>${email.bodyHtml}</body></html>`
     : "";
 
   useEffect(() => {
@@ -78,12 +106,12 @@ export default function EmailDetailPage() {
               title="Email content"
               srcDoc={emailHtmlDocument}
               sandbox="allow-popups allow-popups-to-escape-sandbox"
-              className="h-[72vh] w-full rounded-lg border border-slate-700 bg-white"
+              className="h-[72vh] w-full rounded-xl border border-blue-300/20 bg-[#020b24] shadow-inner"
             />
           ) : (
-            <div className="whitespace-pre-wrap text-sm leading-7 text-slate-200">
-              {email.bodyText || email.body || email.snippet}
-            </div>
+            <article className="max-h-[72vh] overflow-y-auto rounded-xl border border-blue-300/20 bg-slate-950/60 p-5 text-sm leading-7 text-slate-200">
+              <p className="whitespace-pre-wrap">{email.bodyText || email.body || email.snippet}</p>
+            </article>
           )}
         </article>
       )}
