@@ -60,8 +60,12 @@ REQUEST_CONTEXT_WORDS = [
     "asap",
     "urgent",
     "deadline",
-    "by ",
-    "before ",
+]
+
+MARKETING_CTA_PATTERNS = [
+    re.compile(r"\bjoin\b[^.\n]*\bconnect with\b[^.\n]*\bcommunity\b", re.IGNORECASE),
+    re.compile(r"\bjoin\b[^.\n]*\bglobal community\b", re.IGNORECASE),
+    re.compile(r"\b(sign up|subscribe|become a member|membership team|learn more)\b", re.IGNORECASE),
 ]
 
 NOISE_TOKENS = [
@@ -179,10 +183,6 @@ def extract_task(email: str) -> str:
 
             if score > best_score:
                 start = max(0, keyword_pos - 20)
-                if start > 0:
-                    previous_space = sentence.rfind(" ", 0, start)
-                    if previous_space != -1:
-                        start = previous_space + 1
                 candidate = sentence[start : keyword_pos + keyword_len + 80]
                 best = _clean_task_phrase(candidate)
                 best_score = score
@@ -238,6 +238,9 @@ def extract_deadline(email: str) -> str:
 
 
 def extract_priority(email: str) -> str:
+    if is_promotional_email(email):
+        return "Low"
+
     text = (email or "").lower()
 
     has_task_context = any(word in text for word in REQUEST_CONTEXT_WORDS) or _contains_task_keyword(text)
@@ -296,11 +299,21 @@ def is_task_noise(task: str) -> bool:
     return False
 
 
+def is_marketing_cta_task(task: str) -> bool:
+    text = (task or "").strip().lower()
+    if not text:
+        return False
+
+    return any(pattern.search(text) for pattern in MARKETING_CTA_PATTERNS)
+
+
 def is_actionable_task(task: str) -> bool:
     text = (task or "").strip().lower()
     if not text or text == "general task":
         return False
     if is_task_noise(text):
+        return False
+    if is_marketing_cta_task(text):
         return False
     return _contains_task_keyword(text) or "follow up" in text
 

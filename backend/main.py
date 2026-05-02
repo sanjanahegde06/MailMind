@@ -1,12 +1,16 @@
 import base64
 import calendar
+import json
+import logging
+import os
 import re
 from datetime import date, timedelta
 from typing import Any
 
+import google.generativeai as genai
 import requests
 from dotenv import load_dotenv
-from fastapi import FastAPI, Header, HTTPException, Query
+from fastapi import Body, FastAPI, Header, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 
 from db import delete_task, get_all_tasks, save_task, set_task_done, task_exists
@@ -14,7 +18,11 @@ from rule_extractor import extract_batch, extract_deadline, is_actionable_task, 
 
 load_dotenv()
 
+logger = logging.getLogger("mailmind")
+
 GMAIL_BASE = "https://gmail.googleapis.com/gmail/v1/users/me/messages"
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "").strip()
+GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-1.5-flash-latest").strip()
 
 MONTH_LOOKUP = {
     "jan": 1,
@@ -520,6 +528,153 @@ def update_task_done(email_id: str, done: bool = Query(default=True)) -> dict[st
         raise HTTPException(status_code=404, detail="Task not found")
 
     return {"email_id": email_id, "done": bool(done), "message": "Task updated"}
+
+
+def _build_fallback_summary(subject: str, body_text: str) -> dict:
+    """Simple regex-based summary as fallback when Gemini fails."""
+    
+    def extract_overview(text: str) -> str:
+        sentences = [s.strip() for s in re.split(r'[.!?]+', text) if s.strip()]
+        if sentences:
+            return sentences[0][:200]
+        return subject[:200] if subject else "No overview available"
+    
+    def extract_key_points(text: str) -> list[str]:
+        lines = text.split('\n')
+        points = [line.strip() for line in lines if line.strip() and len(line.strip()) > 10]
+        return points[:4]
+    
+    def extract_deadlines(text: str) -> list[str]:
+        deadline_pattern = r'(deadline|due|by|before)[:\s]+([^\n.]+)'
+        matches = re.findall(deadline_pattern, text, re.IGNORECASE)
+        return [m[1].strip() for m in matches][:3]
+    
+    def extract_actions(text: str) -> list[str]:
+        action_pattern = r'(please|need to|should|must|action)[:\s]+([^\n.]+)'
+        matches = re.findall(action_pattern, text, re.IGNORECASE)
+        return [m[1].strip() for m in matches][:3]
+    
+    combined_text = f"{subject}\n{body_text}"
+    
+    return {
+        "overview": extract_overview(combined_text),
+        "keyPoints": extract_key_points(body_text),
+        "deadlines": extract_deadlines(combined_text),
+        "actionItems": extract_actions(combined_text),
+        "priority": "Medium"
+    }
+
+
+def _summarize_with_gemini(subject: str, body_text: str) -> dict | None:
+    """Attempt to summarize email using Gemini API."""
+    if not GEMINI_API_KEY:
+        return None
+
+    def _candidate_model_names() -> list[str]:
+        discovered: list[str] = []
+        try:
+            for item in genai.list_models():
+                methods = getattr(item, "supported_generation_methods", []) or []
+                if "generateContent" not in methods:
+                    continue
+                name = str(getattr(item, "name", "")).strip()
+                if name.startswith("models/"):
+                    name = name.removeprefix("models/")
+                if name:
+                    discovered.append(name)
+        except Exception as exc:
+            logger.warning("Gemini model discovery failed: %s", exc)
+
+        preferred = [
+            GEMINI_MODEL,
+            "gemini-1.5-flash-latest",
+            "gemini-1.5-flash-8b-latest",
+            "gemini-2.0-flash",
+            "gemini-2.0-flash-lite",
+        ]
+
+        merged: list[str] = []
+        for name in discovered + preferred:
+            normalized = (name or "").strip().removeprefix("models/")
+            if normalized and normalized not in merged:
+                merged.append(normalized)
+        return merged
+
+    try:
+        genai.configure(api_key=GEMINI_API_KEY)
+        prompt = f"""Analyze the following email and provide a structured summary in strict JSON.
+
+Subject: {subject}
+
+Body:
+{body_text}
+
+Return ONLY valid JSON (no markdown, no extra text) with this exact structure:
+{{
+  "overview": "2-3 sentence summary",
+  "keyPoints": ["point1", "point2", "point3"],
+  "deadlines": ["deadline1", "deadline2"],
+  "actionItems": ["action1", "action2"],
+  "priority": "Low|Medium|High"
+}}
+
+If a section has no relevant information, use empty string for overview or empty array for lists."""
+
+        for model_name in _candidate_model_names():
+            try:
+                model = genai.GenerativeModel(model_name)
+                response = model.generate_content(
+                    prompt,
+                    generation_config={"response_mime_type": "application/json"},
+                )
+                response_text = (getattr(response, "text", "") or "").strip()
+                if not response_text:
+                    continue
+
+                if "```json" in response_text:
+                    response_text = response_text.split("```json", 1)[1].split("```", 1)[0].strip()
+                elif "```" in response_text:
+                    response_text = response_text.split("```", 1)[1].split("```", 1)[0].strip()
+
+                summary = json.loads(response_text)
+                priority_value = str(summary.get("priority", "Medium")).strip().title()
+                if priority_value not in {"Low", "Medium", "High"}:
+                    priority_value = "Medium"
+
+                return {
+                    "overview": str(summary.get("overview", ""))[:300],
+                    "keyPoints": [str(p)[:150] for p in (summary.get("keyPoints") or [])][:4],
+                    "deadlines": [str(d)[:150] for d in (summary.get("deadlines") or [])][:3],
+                    "actionItems": [str(a)[:150] for a in (summary.get("actionItems") or [])][:4],
+                    "priority": priority_value,
+                }
+            except Exception as model_exc:
+                logger.warning("Gemini summarization failed for model '%s': %s", model_name, model_exc)
+
+        return None
+    except Exception as exc:
+        logger.warning("Gemini summarization initialization failed: %s", exc)
+        return None
+
+
+@app.post("/summarize-email")
+def summarize_email(data: dict = Body(...)) -> dict:
+    """Summarize an email using Gemini API with fallback to regex-based summary."""
+    email_id = data.get("email_id", "").strip() if isinstance(data, dict) else ""
+    subject = data.get("subject", "").strip() if isinstance(data, dict) else ""
+    body_text = data.get("body_text", "").strip() if isinstance(data, dict) else ""
+
+    if not email_id or not subject or not body_text:
+        raise HTTPException(status_code=400, detail="email_id, subject, and body_text are required")
+    
+    # Try Gemini first
+    gemini_summary = _summarize_with_gemini(subject, body_text)
+    if gemini_summary:
+        return {"summary": gemini_summary, "source": "gemini"}
+    
+    # Fall back to simple summary
+    fallback_summary = _build_fallback_summary(subject, body_text)
+    return {"summary": fallback_summary, "source": "fallback"}
 
 
 @app.delete("/tasks/{email_id}")
