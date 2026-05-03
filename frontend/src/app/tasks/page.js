@@ -5,7 +5,7 @@ import ClockPicker from "@/components/clock-picker";
 import TaskCard from "@/components/task-card";
 import { useEffect, useState } from "react";
 
-const BACKEND_BASE_URL = (process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8000").replace(/\/$/, "");
+const BACKEND_BASE_URL = (process.env.BACKEND_BASE_URL || "http://localhost:8000").replace(/\/$/, "");
 
 const PRIORITY_ORDER_DESC = { High: 0, Medium: 1, Low: 2 };
 const STATUS_FILTERS = [
@@ -136,7 +136,7 @@ export default function TasksPage() {
         cache: "no-store",
       });
 
-      const response = await fetch("http://localhost:8000/tasks", {
+      const response = await fetch(`${BACKEND_BASE_URL}/tasks`, {
         method: "GET",
         cache: "no-store",
       });
@@ -217,7 +217,7 @@ export default function TasksPage() {
     try {
       setError("");
       const emailIds = Array.from(selectedIds);
-      const response = await fetch("http://localhost:8000/tasks/delete-batch", {
+      const response = await fetch(`${BACKEND_BASE_URL}/tasks/delete-batch`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

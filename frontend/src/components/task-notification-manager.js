@@ -6,7 +6,7 @@ const POLL_INTERVAL_MS = 60000;
 const REMINDER_GRACE_MS = 10 * 60 * 1000;
 const IMMEDIATE_GRACE_MS = 6 * 60 * 60 * 1000;
 const STORAGE_KEY = "mailmind.reminders.sent";
-const BACKEND_BASE_URL = (process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8000").replace(/\/$/, "");
+const BACKEND_BASE_URL = (process.env.BACKEND_BASE_URL || "http://localhost:8000").replace(/\/$/, "");
 
 function parseDate(value) {
   if (!value) return null;
