@@ -1,0 +1,45 @@
+import { authOptions } from "@/lib/auth-options";
+import { getServerSession } from "next-auth";
+
+const BACKEND_BASE_URL = process.env.BACKEND_BASE_URL || "http://localhost:8000";
+const PUSH_DISPATCH_SECRET = process.env.PUSH_DISPATCH_SECRET || "";
+
+export async function POST(request) {
+  const session = await getServerSession(authOptions);
+  const providedSecret = request.headers.get("x-push-secret") || "";
+
+  if (!session?.user?.email && (!PUSH_DISPATCH_SECRET || providedSecret !== PUSH_DISPATCH_SECRET)) {
+    return Response.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const body = await request.json().catch(() => ({}));
+
+  try {
+    const response = await fetch(`${BACKEND_BASE_URL}/push/dispatch`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-push-secret": PUSH_DISPATCH_SECRET,
+      },
+      body: JSON.stringify({
+        user_email: session?.user?.email || undefined,
+        ...body,
+      }),
+    });
+
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      return Response.json({ error: data?.detail || "Dispatch failed" }, { status: response.status });
+    }
+
+    return Response.json(data);
+  } catch (error) {
+    return Response.json(
+      {
+        error: "Unable to reach backend",
+        details: error instanceof Error ? error.message : "Unknown error",
+      },
+      { status: 500 },
+    );
+  }
+}

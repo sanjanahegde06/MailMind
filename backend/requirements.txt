@@ -4,3 +4,4 @@ pymongo==4.11.1
 python-dotenv==1.0.1
 requests==2.32.3
 google-generativeai==0.7.2
+pywebpush==1.14.1
