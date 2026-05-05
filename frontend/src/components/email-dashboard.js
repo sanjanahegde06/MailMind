@@ -274,22 +274,27 @@ export default function EmailDashboard() {
         ))}
       </div>
 
-      {promotionalEmails.length > 0 ? (
-        <div className="mt-8">
-          <div className="mb-3 flex items-center justify-between">
+      <div className="mt-8">
+        <div className="mb-3 flex items-center justify-between">
+          <div className="flex items-center gap-3">
             <h2 className="text-lg font-semibold text-slate-100">Promotions</h2>
-            <div className="flex items-center gap-3">
-              <span className="text-xs uppercase tracking-[0.2em] text-cyan-200/70">Auto-filtered</span>
-              <button
-                type="button"
-                onClick={() => setShowPromotions((prev) => !prev)}
-                className="rounded-full border border-cyan-200/30 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-cyan-100 transition hover:border-cyan-100/70"
-              >
-                {showPromotions ? "Hide" : "Show"}
-              </button>
-            </div>
+            <span className="rounded-full border border-blue-300/20 bg-blue-400/10 px-2 py-0.5 text-[10px] uppercase tracking-[0.2em] text-slate-200">
+              {promotionalEmails.length}
+            </span>
           </div>
-          {showPromotions ? (
+          <div className="flex items-center gap-3">
+            <span className="text-xs uppercase tracking-[0.2em] text-cyan-200/70">Auto-filtered</span>
+            <button
+              type="button"
+              onClick={() => setShowPromotions((prev) => !prev)}
+              className="rounded-full border border-cyan-200/30 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-cyan-100 transition hover:border-cyan-100/70"
+            >
+              {showPromotions ? "Hide" : "Show"}
+            </button>
+          </div>
+        </div>
+        {showPromotions ? (
+          promotionalEmails.length > 0 ? (
             <div className="overflow-hidden rounded-2xl border border-blue-400/20 bg-slate-900/60 shadow-xl backdrop-blur">
               {promotionalEmails.map((email, index) => (
                 <div
@@ -322,11 +327,15 @@ export default function EmailDashboard() {
             </div>
           ) : (
             <div className="rounded-2xl border border-blue-400/20 bg-slate-900/60 p-4 text-sm text-slate-300 shadow-xl backdrop-blur">
-              Promotional emails are hidden. Click Show to view them.
+              No promotional emails right now.
             </div>
-          )}
-        </div>
-      ) : null}
+          )
+        ) : (
+          <div className="rounded-2xl border border-blue-400/20 bg-slate-900/60 p-4 text-sm text-slate-300 shadow-xl backdrop-blur">
+            Promotional emails are hidden. Click Show to view them.
+          </div>
+        )}
+      </div>
 
       {isLoadingMore && !error && (
         <div className="mt-4 rounded-2xl border border-blue-400/25 bg-slate-900/80 p-4 text-sm text-slate-300 shadow-sm backdrop-blur">
