@@ -20,6 +20,25 @@ function isLikelyGmailId(id) {
   return /^[a-f0-9]{10,}$/i.test(String(id || "").trim());
 }
 
+function formatReminderLabel(customReminders, deadlineDisplay) {
+  if (Array.isArray(customReminders) && customReminders.length > 0) {
+    const upcoming = customReminders
+      .map((value) => new Date(value))
+      .filter((value) => !Number.isNaN(value.getTime()))
+      .sort((a, b) => a.getTime() - b.getTime());
+
+    if (upcoming.length > 0) {
+      return `Reminder set: ${upcoming[0].toLocaleString()}`;
+    }
+  }
+
+  if (deadlineDisplay) {
+    return "Reminder: 1 day and 1 hour before deadline";
+  }
+
+  return "Reminder: not set";
+}
+
 export default function TaskCard({ task }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const normalized = normalizePriority(task.priority);
@@ -29,6 +48,7 @@ export default function TaskCard({ task }) {
   const statusLabel = task.status?.label || "";
   const statusTone = task.status?.tone || "";
   const selected = Boolean(task.selected);
+  const reminderLabel = formatReminderLabel(task.custom_reminders, task.deadlineDisplay || task.deadline);
 
   const handleMenuToggle = (event) => {
     event.stopPropagation();
@@ -137,6 +157,9 @@ export default function TaskCard({ task }) {
 
       <p className="text-xs text-slate-300 sm:text-sm break-words">
         Deadline: <span className="font-medium text-cyan-100">{task.deadlineDisplay || task.deadline || "Not specified"}</span>
+      </p>
+      <p className="mt-1 text-xs text-slate-300 sm:text-sm break-words">
+        {reminderLabel}
       </p>
       <p className="mt-2 text-xs text-cyan-200/80 sm:mt-3">
         {canOpenEmail ? (
