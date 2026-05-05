@@ -50,13 +50,16 @@ function buildReminderSchedule(task) {
   const customReminders = Array.isArray(task.custom_reminders) ? task.custom_reminders : [];
   const createdAt = parseDate(task.created_at);
 
-  for (const reminder of customReminders) {
-    const time = parseDate(reminder);
-    if (!time) continue;
-    schedule.push({
-      id: `custom:${task.email_id}:${time.toISOString()}`,
-      time,
-    });
+  if (customReminders.length > 0) {
+    for (const reminder of customReminders) {
+      const time = parseDate(reminder);
+      if (!time) continue;
+      schedule.push({
+        id: `custom:${task.email_id}:${time.toISOString()}`,
+        time,
+      });
+    }
+    return schedule;
   }
 
   const oneDay = new Date(deadlineAt.getTime() - 24 * 60 * 60 * 1000);

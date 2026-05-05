@@ -276,7 +276,18 @@ def is_promotional_email(email: str) -> bool:
     text = _normalize_spaces(email).lower()
     promo_hits = sum(1 for keyword in PROMOTIONAL_KEYWORDS if keyword in text)
     has_request_context = any(word in text for word in REQUEST_CONTEXT_WORDS) or _contains_task_keyword(text)
-    return promo_hits >= 2 and not has_request_context
+    has_marketing_cta = any(pattern.search(text) for pattern in MARKETING_CTA_PATTERNS)
+
+    if promo_hits >= 2:
+        return not has_request_context
+
+    if promo_hits >= 1 and has_marketing_cta and not has_request_context:
+        return True
+
+    if "unsubscribe" in text and not has_request_context:
+        return True
+
+    return False
 
 
 def is_task_noise(task: str) -> bool:

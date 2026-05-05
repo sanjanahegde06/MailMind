@@ -309,7 +309,11 @@ export default function EmailDetailPage() {
         )}
 
         {error && (
-          <div className="rounded-2xl border border-rose-300/30 bg-rose-500/10 p-6 text-rose-200 shadow-sm">{error}</div>
+          <div className="rounded-2xl border border-rose-300/30 bg-rose-500/10 p-6 text-rose-200 shadow-sm">
+            {error.includes("Requested entity was not found")
+              ? "Email not found in Gmail. It may have been moved or you signed into a different account."
+              : error}
+          </div>
         )}
 
         {!isLoading && !error && email && (

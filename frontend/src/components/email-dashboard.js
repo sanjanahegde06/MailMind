@@ -16,6 +16,34 @@ const inboxCache = {
   lastTaskSyncAt: 0,
 };
 
+const PROMO_KEYWORDS = [
+  "unsubscribe",
+  "offer",
+  "sale",
+  "discount",
+  "promo",
+  "promotion",
+  "newsletter",
+  "limited time",
+  "buy now",
+  "shop now",
+  "free trial",
+  "deal",
+  "save",
+  "webinar",
+  "workshop",
+  "announcement",
+];
+
+function isPromotionalEmail(email) {
+  const subject = String(email?.subject || "").toLowerCase();
+  const snippet = String(email?.snippet || "").toLowerCase();
+  const from = String(email?.from || "").toLowerCase();
+  const combined = `${subject} ${snippet} ${from}`;
+  const hits = PROMO_KEYWORDS.filter((keyword) => combined.includes(keyword)).length;
+  return hits >= 2 || (hits >= 1 && combined.includes("unsubscribe"));
+}
+
 export default function EmailDashboard() {
   const [emails, setEmails] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -198,6 +226,9 @@ export default function EmailDashboard() {
     ? new Date(lastUpdatedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
     : "--";
 
+  const promotionalEmails = emails.filter(isPromotionalEmail);
+  const primaryEmails = emails.filter((email) => !isPromotionalEmail(email));
+
   return (
     <section className="mx-auto w-full max-w-6xl px-4 py-8 sm:px-6">
       <div className="mb-6 rounded-3xl border border-cyan-300/25 bg-gradient-to-r from-blue-700/85 via-sky-700/80 to-cyan-600/75 p-8 text-white shadow-[0_18px_55px_rgba(13,148,255,0.25)]">
@@ -227,12 +258,36 @@ export default function EmailDashboard() {
       )}
 
       <div className="overflow-hidden rounded-2xl border border-blue-400/20 bg-slate-900/70 shadow-xl backdrop-blur">
-        {emails.map((email, index) => (
-          <div key={email.id} className={index === emails.length - 1 ? "" : "border-b border-blue-400/15"}>
+        {primaryEmails.map((email, index) => (
+          <div
+            key={email.id}
+            className={index === primaryEmails.length - 1 ? "" : "border-b border-blue-400/15"}
+          >
             <EmailCard email={email} />
           </div>
         ))}
       </div>
+
+      {promotionalEmails.length > 0 ? (
+        <div className="mt-8">
+          <div className="mb-3 flex items-center justify-between">
+            <h2 className="text-lg font-semibold text-slate-100">Promotions</h2>
+            <span className="text-xs uppercase tracking-[0.2em] text-cyan-200/70">Auto-filtered</span>
+          </div>
+          <div className="overflow-hidden rounded-2xl border border-blue-400/20 bg-slate-900/60 shadow-xl backdrop-blur">
+            {promotionalEmails.map((email, index) => (
+              <div
+                key={`promo-${email.id}`}
+                className={
+                  index === promotionalEmails.length - 1 ? "" : "border-b border-blue-400/15"
+                }
+              >
+                <EmailCard email={email} />
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : null}
 
       {isLoadingMore && !error && (
         <div className="mt-4 rounded-2xl border border-blue-400/25 bg-slate-900/80 p-4 text-sm text-slate-300 shadow-sm backdrop-blur">

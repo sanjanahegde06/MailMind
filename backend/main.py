@@ -34,7 +34,14 @@ from db import (
     remove_push_subscription,
     remove_push_subscriptions_for_user,
 )
-from rule_extractor import extract_batch, extract_deadline, is_actionable_task, is_promotional_email, is_task_noise
+from rule_extractor import (
+    extract_batch,
+    extract_deadline,
+    is_actionable_task,
+    is_marketing_cta_task,
+    is_promotional_email,
+    is_task_noise,
+)
 
 load_dotenv()
 
@@ -180,14 +187,16 @@ def _build_task_reminder_schedule(task: dict) -> list[dict[str, Any]]:
     custom_reminders = task.get("custom_reminders") or []
     created_at = _parse_iso_datetime(str(task.get("created_at", "")).strip())
 
-    for reminder in custom_reminders:
-        reminder_time = _parse_iso_datetime(str(reminder))
-        if not reminder_time:
-            continue
-        schedule.append({
-            "id": f"custom:{task.get('email_id')}:{reminder_time.isoformat()}",
-            "time": reminder_time,
-        })
+    if custom_reminders:
+        for reminder in custom_reminders:
+            reminder_time = _parse_iso_datetime(str(reminder))
+            if not reminder_time:
+                continue
+            schedule.append({
+                "id": f"custom:{task.get('email_id')}:{reminder_time.isoformat()}",
+                "time": reminder_time,
+            })
+        return schedule
 
     one_day = deadline_at - timedelta(days=1)
     one_hour = deadline_at - timedelta(hours=1)
@@ -864,6 +873,9 @@ def get_tasks() -> list[dict]:
             continue
 
         if is_promotional_email(task_text):
+            continue
+
+        if is_marketing_cta_task(task_text):
             continue
 
         if not is_actionable_task(task_text):
