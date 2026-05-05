@@ -5,8 +5,6 @@ import ClockPicker from "@/components/clock-picker";
 import TaskCard from "@/components/task-card";
 import { useEffect, useState } from "react";
 
-const BACKEND_BASE_URL = (process.env.NEXT_PUBLIC_BACKEND_BASE_URL || "").replace(/\/$/, "");
-
 const PRIORITY_ORDER_DESC = { High: 0, Medium: 1, Low: 2 };
 const STATUS_FILTERS = [
   { id: "all", label: "All" },
@@ -162,7 +160,7 @@ export default function TasksPage() {
 
     try {
       const nextDone = !Boolean(task.done);
-      const response = await fetch(`${BACKEND_BASE_URL}/tasks/${encodeURIComponent(emailId)}/done?done=${nextDone}`, {
+      const response = await fetch(`/api/tasks/${encodeURIComponent(emailId)}/done?done=${nextDone}`, {
         method: "PATCH",
       });
 
@@ -185,7 +183,7 @@ export default function TasksPage() {
     }
 
     try {
-      const response = await fetch(`${BACKEND_BASE_URL}/tasks/${encodeURIComponent(emailId)}`, {
+      const response = await fetch(`/api/tasks/${encodeURIComponent(emailId)}`, {
         method: "DELETE",
       });
 
@@ -217,7 +215,7 @@ export default function TasksPage() {
     try {
       setError("");
       const emailIds = Array.from(selectedIds);
-      const response = await fetch(`${BACKEND_BASE_URL}/tasks/delete-batch`, {
+      const response = await fetch("/api/tasks/delete-batch", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -337,7 +335,7 @@ export default function TasksPage() {
 
     try {
       setSavingReminders(true);
-      const response = await fetch(`${BACKEND_BASE_URL}/tasks/${encodeURIComponent(emailId)}/reminders`, {
+      const response = await fetch(`/api/tasks/${encodeURIComponent(emailId)}/reminders`, {
         method: "PATCH",
         headers: {
           "Content-Type": "application/json",
