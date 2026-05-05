@@ -4,7 +4,7 @@ import { getServerSession } from "next-auth";
 const BACKEND_BASE_URL = process.env.BACKEND_BASE_URL;
 const PUSH_DISPATCH_SECRET = process.env.PUSH_DISPATCH_SECRET || "";
 
-export async function POST(request) {
+async function dispatchPush(request, payload) {
   const session = await getServerSession(authOptions);
   const providedSecret = request.headers.get("x-push-secret") || "";
   const isVercelCron = request.headers.get("x-vercel-cron") === "1";
@@ -17,7 +17,11 @@ export async function POST(request) {
     return Response.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const body = await request.json().catch(() => ({}));
+  if (!BACKEND_BASE_URL) {
+    return Response.json({ error: "Backend URL is not configured" }, { status: 500 });
+  }
+
+  const body = payload || {};
 
   try {
     const response = await fetch(`${BACKEND_BASE_URL}/push/dispatch`, {
@@ -47,4 +51,13 @@ export async function POST(request) {
       { status: 500 },
     );
   }
+}
+
+export async function POST(request) {
+  const body = await request.json().catch(() => ({}));
+  return dispatchPush(request, body);
+}
+
+export async function GET(request) {
+  return dispatchPush(request, {});
 }
