@@ -16,33 +16,6 @@ const inboxCache = {
   lastTaskSyncAt: 0,
 };
 
-const PROMO_KEYWORDS = [
-  "unsubscribe",
-  "offer",
-  "sale",
-  "discount",
-  "promo",
-  "promotion",
-  "newsletter",
-  "limited time",
-  "buy now",
-  "shop now",
-  "free trial",
-  "deal",
-  "save",
-  "webinar",
-  "workshop",
-  "announcement",
-];
-
-function isPromotionalEmail(email) {
-  const subject = String(email?.subject || "").toLowerCase();
-  const snippet = String(email?.snippet || "").toLowerCase();
-  const from = String(email?.from || "").toLowerCase();
-  const combined = `${subject} ${snippet} ${from}`;
-  const hits = PROMO_KEYWORDS.filter((keyword) => combined.includes(keyword)).length;
-  return hits >= 2 || (hits >= 1 && combined.includes("unsubscribe"));
-}
 
 export default function EmailDashboard() {
   const [emails, setEmails] = useState([]);
@@ -52,8 +25,6 @@ export default function EmailDashboard() {
   const [lastUpdatedAt, setLastUpdatedAt] = useState(0);
   const [error, setError] = useState(null);
   const [processStatus, setProcessStatus] = useState("");
-  const [showPromotions, setShowPromotions] = useState(false);
-  const [promoOverrides, setPromoOverrides] = useState(() => new Set());
   const isRefreshingRef = useRef(false);
   const hasTriggeredInitialProcessRef = useRef(false);
 
@@ -228,12 +199,7 @@ export default function EmailDashboard() {
     ? new Date(lastUpdatedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
     : "--";
 
-  const promotionalEmails = emails.filter(
-    (email) => isPromotionalEmail(email) && !promoOverrides.has(email?.id),
-  );
-  const primaryEmails = emails.filter(
-    (email) => !isPromotionalEmail(email) || promoOverrides.has(email?.id),
-  );
+  const primaryEmails = emails;
 
   return (
     <section className="mx-auto w-full max-w-6xl px-4 py-8 sm:px-6">
@@ -272,69 +238,6 @@ export default function EmailDashboard() {
             <EmailCard email={email} />
           </div>
         ))}
-      </div>
-
-      <div className="mt-8">
-        <div className="mb-3 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <h2 className="text-lg font-semibold text-slate-100">Promotions</h2>
-            <span className="rounded-full border border-blue-300/20 bg-blue-400/10 px-2 py-0.5 text-[10px] uppercase tracking-[0.2em] text-slate-200">
-              {promotionalEmails.length}
-            </span>
-          </div>
-          <div className="flex items-center gap-3">
-            <span className="text-xs uppercase tracking-[0.2em] text-cyan-200/70">Auto-filtered</span>
-            <button
-              type="button"
-              onClick={() => setShowPromotions((prev) => !prev)}
-              className="rounded-full border border-cyan-200/30 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-cyan-100 transition hover:border-cyan-100/70"
-            >
-              {showPromotions ? "Hide" : "Show"}
-            </button>
-          </div>
-        </div>
-        {showPromotions ? (
-          promotionalEmails.length > 0 ? (
-            <div className="overflow-hidden rounded-2xl border border-blue-400/20 bg-slate-900/60 shadow-xl backdrop-blur">
-              {promotionalEmails.map((email, index) => (
-                <div
-                  key={`promo-${email.id}`}
-                  className={
-                    index === promotionalEmails.length - 1 ? "" : "border-b border-blue-400/15"
-                  }
-                >
-                  <div className="flex flex-wrap items-center justify-between gap-3 border-b border-blue-400/10 px-4 py-2 text-xs text-slate-300">
-                    <span className="uppercase tracking-[0.2em]">Promo</span>
-                    <button
-                      type="button"
-                      onClick={() =>
-                        setPromoOverrides((previous) => {
-                          const next = new Set(previous);
-                          if (email?.id) {
-                            next.add(email.id);
-                          }
-                          return next;
-                        })
-                      }
-                      className="rounded-full border border-emerald-300/30 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-emerald-100 transition hover:border-emerald-200/70"
-                    >
-                      Not promotional
-                    </button>
-                  </div>
-                  <EmailCard email={email} />
-                </div>
-              ))}
-            </div>
-          ) : (
-            <div className="rounded-2xl border border-blue-400/20 bg-slate-900/60 p-4 text-sm text-slate-300 shadow-xl backdrop-blur">
-              No promotional emails right now.
-            </div>
-          )
-        ) : (
-          <div className="rounded-2xl border border-blue-400/20 bg-slate-900/60 p-4 text-sm text-slate-300 shadow-xl backdrop-blur">
-            Promotional emails are hidden. Click Show to view them.
-          </div>
-        )}
       </div>
 
       {isLoadingMore && !error && (

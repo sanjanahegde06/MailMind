@@ -7,8 +7,13 @@ const PUSH_DISPATCH_SECRET = process.env.PUSH_DISPATCH_SECRET || "";
 export async function POST(request) {
   const session = await getServerSession(authOptions);
   const providedSecret = request.headers.get("x-push-secret") || "";
+  const isVercelCron = request.headers.get("x-vercel-cron") === "1";
 
-  if (!session?.user?.email && (!PUSH_DISPATCH_SECRET || providedSecret !== PUSH_DISPATCH_SECRET)) {
+  if (
+    !session?.user?.email &&
+    !isVercelCron &&
+    (!PUSH_DISPATCH_SECRET || providedSecret !== PUSH_DISPATCH_SECRET)
+  ) {
     return Response.json({ error: "Unauthorized" }, { status: 401 });
   }
 
