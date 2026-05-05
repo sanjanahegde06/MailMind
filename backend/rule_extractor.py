@@ -273,11 +273,9 @@ def extract_all(email: str) -> dict[str, str]:
 
 
 def is_promotional_email(email: str) -> bool:
-    text = (email or "").lower()
-    if any(token in text for token in NOISE_TOKENS):
-        return True
+    text = _normalize_spaces(email).lower()
     promo_hits = sum(1 for keyword in PROMOTIONAL_KEYWORDS if keyword in text)
-    has_request_context = any(word in text for word in REQUEST_CONTEXT_WORDS)
+    has_request_context = any(word in text for word in REQUEST_CONTEXT_WORDS) or _contains_task_keyword(text)
     return promo_hits >= 2 and not has_request_context
 
 

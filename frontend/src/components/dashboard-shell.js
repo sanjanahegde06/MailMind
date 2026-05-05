@@ -5,6 +5,7 @@ import Navbar from "@/components/navbar";
 import Sidebar from "@/components/sidebar";
 import SignOutButton from "@/components/signout-button";
 import PushNotificationManager from "@/components/push-notification-manager";
+import TaskNotificationManager from "@/components/task-notification-manager";
 
 export default function DashboardShell({ children }) {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
@@ -18,6 +19,7 @@ export default function DashboardShell({ children }) {
 
       <div className="relative z-20">
         <Navbar onMenuToggle={() => setIsSidebarOpen((prev) => !prev)} />
+        <TaskNotificationManager />
         <PushNotificationManager />
         {children}
       </div>

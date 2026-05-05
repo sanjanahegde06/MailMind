@@ -2,7 +2,7 @@ import { authOptions } from "@/lib/auth-options";
 import { getServerSession } from "next-auth";
 
 const GMAIL_BASE = "https://gmail.googleapis.com/gmail/v1/users/me/messages";
-const BACKEND_BASE = (process.env.BACKEND_BASE_URL || "http://localhost:8000").replace(/\/$/, "");
+const BACKEND_BASE = (process.env.BACKEND_BASE_URL || "").replace(/\/$/, "");
 
 function getHeaderValue(headers = [], headerName) {
   return (

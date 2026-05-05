@@ -5,7 +5,7 @@ import ClockPicker from "@/components/clock-picker";
 import TaskCard from "@/components/task-card";
 import { useEffect, useState } from "react";
 
-const BACKEND_BASE_URL = (process.env.BACKEND_BASE_URL || "http://localhost:8000").replace(/\/$/, "");
+const BACKEND_BASE_URL = (process.env.BACKEND_BASE_URL || "").replace(/\/$/, "");
 
 const PRIORITY_ORDER_DESC = { High: 0, Medium: 1, Low: 2 };
 const STATUS_FILTERS = [

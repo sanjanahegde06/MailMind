@@ -1,7 +1,7 @@
 import { authOptions } from "@/lib/auth-options";
 import { getServerSession } from "next-auth";
 
-const BACKEND_BASE = (process.env.BACKEND_BASE_URL || "http://localhost:8000").replace(/\/$/, "");
+const BACKEND_BASE = (process.env.BACKEND_BASE_URL || "").replace(/\/$/, "");
 
 export async function POST(request, context) {
   const session = await getServerSession(authOptions);

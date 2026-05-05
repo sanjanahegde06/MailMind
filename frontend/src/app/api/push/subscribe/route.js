@@ -1,7 +1,7 @@
 import { authOptions } from "@/lib/auth-options";
 import { getServerSession } from "next-auth";
 
-const BACKEND_BASE_URL = process.env.BACKEND_BASE_URL || "http://localhost:8000";
+const BACKEND_BASE_URL = process.env.BACKEND_BASE_URL;
 
 export async function POST(request) {
   const session = await getServerSession(authOptions);
@@ -19,6 +19,7 @@ export async function POST(request) {
       body: JSON.stringify({
         user_email: session.user.email,
         subscription: body?.subscription,
+        timezone: body?.timezone,
       }),
     });
 

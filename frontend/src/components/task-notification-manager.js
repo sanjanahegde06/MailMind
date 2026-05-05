@@ -6,7 +6,7 @@ const POLL_INTERVAL_MS = 60000;
 const REMINDER_GRACE_MS = 10 * 60 * 1000;
 const IMMEDIATE_GRACE_MS = 6 * 60 * 60 * 1000;
 const STORAGE_KEY = "mailmind.reminders.sent";
-const BACKEND_BASE_URL = (process.env.BACKEND_BASE_URL || "http://localhost:8000").replace(/\/$/, "");
+const BACKEND_BASE_URL = (process.env.BACKEND_BASE_URL || "").replace(/\/$/, "");
 
 function parseDate(value) {
   if (!value) return null;
@@ -83,32 +83,13 @@ function formatDeadline(task) {
 
 export default function TaskNotificationManager() {
   const pollerRef = useRef(null);
-  const permissionPromptedRef = useRef(false);
 
   useEffect(() => {
     let isMounted = true;
 
-    async function ensurePermissionFromGesture(fromGesture = false) {
-      if (typeof Notification === "undefined") return;
-      if (Notification.permission !== "default") return;
-      if (!fromGesture) return;
-      if (permissionPromptedRef.current) return;
-
-      permissionPromptedRef.current = true;
-      try {
-        await Notification.requestPermission();
-      } catch {
-        // Ignore permission errors.
-      }
-    }
-
     async function checkReminders() {
       if (!isMounted) return;
       if (typeof Notification === "undefined") return;
-
-      if (Notification.permission === "default") {
-        await ensurePermissionFromGesture(false);
-      }
 
       if (Notification.permission !== "granted") return;
 
@@ -168,22 +149,11 @@ export default function TaskNotificationManager() {
       }
     }
 
-    const handleUserGesture = () => {
-      ensurePermissionFromGesture(true).then(checkReminders);
-    };
-
-    window.addEventListener("click", handleUserGesture, { once: true });
-    window.addEventListener("keydown", handleUserGesture, { once: true });
-    window.addEventListener("touchstart", handleUserGesture, { once: true });
-
     checkReminders();
     pollerRef.current = setInterval(checkReminders, POLL_INTERVAL_MS);
 
     return () => {
       isMounted = false;
-      window.removeEventListener("click", handleUserGesture);
-      window.removeEventListener("keydown", handleUserGesture);
-      window.removeEventListener("touchstart", handleUserGesture);
       if (pollerRef.current) {
         clearInterval(pollerRef.current);
       }

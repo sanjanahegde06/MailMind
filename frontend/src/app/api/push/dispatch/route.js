@@ -1,7 +1,7 @@
 import { authOptions } from "@/lib/auth-options";
 import { getServerSession } from "next-auth";
 
-const BACKEND_BASE_URL = process.env.BACKEND_BASE_URL || "http://localhost:8000";
+const BACKEND_BASE_URL = process.env.BACKEND_BASE_URL;
 const PUSH_DISPATCH_SECRET = process.env.PUSH_DISPATCH_SECRET || "";
 
 export async function POST(request) {
