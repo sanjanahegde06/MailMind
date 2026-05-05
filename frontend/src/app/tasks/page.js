@@ -5,7 +5,7 @@ import ClockPicker from "@/components/clock-picker";
 import TaskCard from "@/components/task-card";
 import { useEffect, useState } from "react";
 
-const BACKEND_BASE_URL = (process.env.BACKEND_BASE_URL || "").replace(/\/$/, "");
+const BACKEND_BASE_URL = (process.env.NEXT_PUBLIC_BACKEND_BASE_URL || "").replace(/\/$/, "");
 
 const PRIORITY_ORDER_DESC = { High: 0, Medium: 1, Low: 2 };
 const STATUS_FILTERS = [
@@ -129,6 +129,10 @@ export default function TasksPage() {
     try {
       setIsLoading(true);
       setError("");
+
+      if (!BACKEND_BASE_URL) {
+        throw new Error("Backend URL is not configured. Set NEXT_PUBLIC_BACKEND_BASE_URL.");
+      }
 
       // Ensure new emails are processed even when user opens Tasks first.
       await fetch("/api/process-emails?maxResults=20", {

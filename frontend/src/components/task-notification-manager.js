@@ -6,7 +6,7 @@ const POLL_INTERVAL_MS = 60000;
 const REMINDER_GRACE_MS = 10 * 60 * 1000;
 const IMMEDIATE_GRACE_MS = 6 * 60 * 60 * 1000;
 const STORAGE_KEY = "mailmind.reminders.sent";
-const BACKEND_BASE_URL = (process.env.BACKEND_BASE_URL || "").replace(/\/$/, "");
+const BACKEND_BASE_URL = (process.env.NEXT_PUBLIC_BACKEND_BASE_URL || "").replace(/\/$/, "");
 
 function parseDate(value) {
   if (!value) return null;
@@ -92,6 +92,7 @@ export default function TaskNotificationManager() {
       if (typeof Notification === "undefined") return;
 
       if (Notification.permission !== "granted") return;
+      if (!BACKEND_BASE_URL) return;
 
       let tasks = [];
       try {
