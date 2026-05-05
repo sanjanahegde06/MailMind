@@ -52,6 +52,8 @@ export default function EmailDashboard() {
   const [lastUpdatedAt, setLastUpdatedAt] = useState(0);
   const [error, setError] = useState(null);
   const [processStatus, setProcessStatus] = useState("");
+  const [showPromotions, setShowPromotions] = useState(false);
+  const [promoOverrides, setPromoOverrides] = useState(() => new Set());
   const isRefreshingRef = useRef(false);
   const hasTriggeredInitialProcessRef = useRef(false);
 
@@ -226,8 +228,12 @@ export default function EmailDashboard() {
     ? new Date(lastUpdatedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
     : "--";
 
-  const promotionalEmails = emails.filter(isPromotionalEmail);
-  const primaryEmails = emails.filter((email) => !isPromotionalEmail(email));
+  const promotionalEmails = emails.filter(
+    (email) => isPromotionalEmail(email) && !promoOverrides.has(email?.id),
+  );
+  const primaryEmails = emails.filter(
+    (email) => !isPromotionalEmail(email) || promoOverrides.has(email?.id),
+  );
 
   return (
     <section className="mx-auto w-full max-w-6xl px-4 py-8 sm:px-6">
@@ -272,20 +278,53 @@ export default function EmailDashboard() {
         <div className="mt-8">
           <div className="mb-3 flex items-center justify-between">
             <h2 className="text-lg font-semibold text-slate-100">Promotions</h2>
-            <span className="text-xs uppercase tracking-[0.2em] text-cyan-200/70">Auto-filtered</span>
-          </div>
-          <div className="overflow-hidden rounded-2xl border border-blue-400/20 bg-slate-900/60 shadow-xl backdrop-blur">
-            {promotionalEmails.map((email, index) => (
-              <div
-                key={`promo-${email.id}`}
-                className={
-                  index === promotionalEmails.length - 1 ? "" : "border-b border-blue-400/15"
-                }
+            <div className="flex items-center gap-3">
+              <span className="text-xs uppercase tracking-[0.2em] text-cyan-200/70">Auto-filtered</span>
+              <button
+                type="button"
+                onClick={() => setShowPromotions((prev) => !prev)}
+                className="rounded-full border border-cyan-200/30 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-cyan-100 transition hover:border-cyan-100/70"
               >
-                <EmailCard email={email} />
-              </div>
-            ))}
+                {showPromotions ? "Hide" : "Show"}
+              </button>
+            </div>
           </div>
+          {showPromotions ? (
+            <div className="overflow-hidden rounded-2xl border border-blue-400/20 bg-slate-900/60 shadow-xl backdrop-blur">
+              {promotionalEmails.map((email, index) => (
+                <div
+                  key={`promo-${email.id}`}
+                  className={
+                    index === promotionalEmails.length - 1 ? "" : "border-b border-blue-400/15"
+                  }
+                >
+                  <div className="flex flex-wrap items-center justify-between gap-3 border-b border-blue-400/10 px-4 py-2 text-xs text-slate-300">
+                    <span className="uppercase tracking-[0.2em]">Promo</span>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setPromoOverrides((previous) => {
+                          const next = new Set(previous);
+                          if (email?.id) {
+                            next.add(email.id);
+                          }
+                          return next;
+                        })
+                      }
+                      className="rounded-full border border-emerald-300/30 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-emerald-100 transition hover:border-emerald-200/70"
+                    >
+                      Not promotional
+                    </button>
+                  </div>
+                  <EmailCard email={email} />
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="rounded-2xl border border-blue-400/20 bg-slate-900/60 p-4 text-sm text-slate-300 shadow-xl backdrop-blur">
+              Promotional emails are hidden. Click Show to view them.
+            </div>
+          )}
         </div>
       ) : null}
 

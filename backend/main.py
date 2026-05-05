@@ -19,6 +19,7 @@ from db import (
     delete_task,
     delete_tasks_batch,
     get_all_tasks,
+    get_all_tasks_for_user,
     get_tasks_for_dispatch,
     get_tasks_with_custom_reminders,
     is_push_event_sent,
@@ -30,6 +31,7 @@ from db import (
     update_task_last_notified,
     update_task_deadline,
     update_task_reminders,
+    update_task_user_email,
     mark_push_event_sent,
     remove_push_subscription,
     remove_push_subscriptions_for_user,
@@ -358,6 +360,17 @@ def _fetch_email_detail_from_gmail(access_token: str, email_id: str) -> tuple[st
     return text or detail_body.get("snippet", "") or "", received_at
 
 
+def _fetch_user_email_from_gmail(access_token: str) -> str:
+    profile_response = requests.get(
+        f"{GMAIL_BASE}/profile",
+        headers=_auth_headers(access_token),
+        timeout=20,
+    )
+    profile_response.raise_for_status()
+    profile_body = profile_response.json()
+    return str(profile_body.get("emailAddress", "")).strip()
+
+
 def _normalize_priority(priority_value: str) -> str:
     value = (priority_value or "").strip().lower()
     if value.startswith("h"):
@@ -653,6 +666,30 @@ def process_emails(
         }
 
     try:
+        user_email = _fetch_user_email_from_gmail(access_token)
+    except requests.RequestException:
+        return {
+            "requested": 0,
+            "pending_new": 0,
+            "processed_new": 0,
+            "skipped_existing": 0,
+            "failed": 0,
+            "rate_limited": False,
+            "message": "Failed to identify Gmail user. Please reconnect Google account.",
+        }
+
+    if not user_email:
+        return {
+            "requested": 0,
+            "pending_new": 0,
+            "processed_new": 0,
+            "skipped_existing": 0,
+            "failed": 0,
+            "rate_limited": False,
+            "message": "Unable to resolve Gmail user email.",
+        }
+
+    try:
         email_ids = _fetch_recent_email_ids_from_gmail(access_token, max_results)
         emails = [{"email_id": email_id, "content": ""} for email_id in email_ids]
     except requests.RequestException:
@@ -682,6 +719,7 @@ def process_emails(
             continue
 
         if task_exists(email_id):
+            update_task_user_email(email_id, user_email)
             skipped_existing += 1
             continue
 
@@ -736,6 +774,7 @@ def process_emails(
 
             inserted = save_task(
                 email_id=email_id,
+                user_email=user_email,
                 task=extracted["task"],
                 deadline=extracted["deadline"],
                 priority=extracted["priority"],
@@ -745,7 +784,7 @@ def process_emails(
 
             if inserted:
                 processed_new += 1
-                event_id = f"push:new-email:{email_id}"
+                event_id = f"push:new-email:{user_email}:{email_id}"
                 if not is_push_event_sent(event_id):
                     task_title = str(extracted.get("task") or "New important email")
                     deadline_label = str(extracted.get("deadline") or "Not specified")
@@ -761,7 +800,8 @@ def process_emails(
                             "url": f"/dashboard/email/{email_id}",
                             "tag": event_id,
                         }
-                        if _send_push_to_subscriptions(payload) > 0:
+                        subscriptions = list_push_subscriptions(user_email)
+                        if _send_push_to_subscriptions(payload, subscriptions) > 0:
                             mark_push_event_sent(event_id)
             else:
                 skipped_existing += 1
@@ -785,8 +825,12 @@ def process_emails(
 
 
 @app.get("/tasks")
-def get_tasks() -> list[dict]:
-    tasks = get_all_tasks()
+def get_tasks(user_email: str = Query(default="")) -> list[dict]:
+    user_email = (user_email or "").strip()
+    if not user_email:
+        raise HTTPException(status_code=400, detail="user_email is required")
+
+    tasks = get_all_tasks_for_user(user_email)
     filtered: list[dict] = []
 
     for task in tasks:
@@ -1015,8 +1059,8 @@ def push_dispatch(
     now = datetime.now(timezone.utc)
     window_start = now - timedelta(minutes=PUSH_REMINDER_GRACE_SEC // 60)
     window_end = now + timedelta(hours=24, minutes=PUSH_REMINDER_GRACE_SEC // 60)
-    tasks = get_tasks_for_dispatch(window_start, window_end)
-    custom_tasks = get_tasks_with_custom_reminders()
+    tasks = get_tasks_for_dispatch(window_start, window_end, user_email or None)
+    custom_tasks = get_tasks_with_custom_reminders(user_email or None)
     if custom_tasks:
         seen = {str(task.get("email_id") or "").strip() for task in tasks}
         tasks.extend([task for task in custom_tasks if str(task.get("email_id") or "").strip() not in seen])

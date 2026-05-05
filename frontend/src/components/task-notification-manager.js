@@ -95,11 +95,9 @@ export default function TaskNotificationManager() {
       if (typeof Notification === "undefined") return;
 
       if (Notification.permission !== "granted") return;
-      if (!BACKEND_BASE_URL) return;
-
       let tasks = [];
       try {
-        const response = await fetch(`${BACKEND_BASE_URL}/tasks`, { cache: "no-store" });
+        const response = await fetch("/api/tasks", { cache: "no-store" });
         if (!response.ok) return;
         tasks = await response.json();
       } catch {

@@ -130,17 +130,13 @@ export default function TasksPage() {
       setIsLoading(true);
       setError("");
 
-      if (!BACKEND_BASE_URL) {
-        throw new Error("Backend URL is not configured. Set NEXT_PUBLIC_BACKEND_BASE_URL.");
-      }
-
       // Ensure new emails are processed even when user opens Tasks first.
       await fetch("/api/process-emails?maxResults=20", {
         method: "GET",
         cache: "no-store",
       });
 
-      const response = await fetch(`${BACKEND_BASE_URL}/tasks`, {
+      const response = await fetch("/api/tasks", {
         method: "GET",
         cache: "no-store",
       });

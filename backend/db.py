@@ -38,6 +38,7 @@ def task_exists(email_id: str) -> bool:
 
 def save_task(
     email_id: str,
+    user_email: str,
     task: str,
     deadline: str,
     priority: str,
@@ -48,6 +49,7 @@ def save_task(
     """Saves a new task. If email_id exists, it fails (returning False)."""
     document = {
         "email_id": email_id,
+        "user_email": user_email or "",
         "task": task,
         "deadline": deadline,
         "deadline_at": deadline_at,
@@ -82,6 +84,35 @@ def get_all_tasks() -> list[dict]:
         last_notified_at = doc.get("last_notified_at")
         results.append({
             "email_id": doc.get("email_id", ""),
+            "user_email": doc.get("user_email", ""),
+            "task": doc.get("task", "No task"),
+            "deadline": doc.get("deadline", "Not specified"),
+            "deadline_at": deadline_at.isoformat() if deadline_at else "",
+            "priority": doc.get("priority", "Medium"),
+            "done": bool(doc.get("done", False)),
+            "done_at": doc.get("done_at").isoformat() if doc.get("done_at") else "",
+            "created_at": created_at.isoformat() if created_at else "",
+            "email_received_at": received_at.isoformat() if received_at else "",
+            "custom_reminders": list(doc.get("custom_reminders") or []),
+            "last_notified_at": last_notified_at.isoformat() if last_notified_at else "",
+        })
+    return results
+
+
+def get_all_tasks_for_user(user_email: str) -> list[dict]:
+    """Fetches tasks for a specific user that are NOT deleted."""
+    query = {"is_deleted": {"$ne": True}, "user_email": user_email or ""}
+    docs = list(tasks_collection.find(query, {"_id": 0}).sort("created_at", -1))
+    
+    results = []
+    for doc in docs:
+        created_at = doc.get("created_at")
+        deadline_at = doc.get("deadline_at")
+        received_at = doc.get("email_received_at")
+        last_notified_at = doc.get("last_notified_at")
+        results.append({
+            "email_id": doc.get("email_id", ""),
+            "user_email": doc.get("user_email", ""),
             "task": doc.get("task", "No task"),
             "deadline": doc.get("deadline", "Not specified"),
             "deadline_at": deadline_at.isoformat() if deadline_at else "",
@@ -221,12 +252,14 @@ def mark_push_event_sent(event_id: str) -> None:
     )
 
 
-def get_tasks_for_dispatch(window_start: datetime, window_end: datetime) -> list[dict]:
+def get_tasks_for_dispatch(window_start: datetime, window_end: datetime, user_email: str | None = None) -> list[dict]:
     query = {
         "is_deleted": {"$ne": True},
         "done": {"$ne": True},
         "deadline_at": {"$ne": None, "$gte": window_start, "$lte": window_end},
     }
+    if user_email:
+        query["user_email"] = user_email
     docs = list(tasks_collection.find(query, {"_id": 0}).sort("deadline_at", 1))
     results: list[dict] = []
     for doc in docs:
@@ -236,6 +269,7 @@ def get_tasks_for_dispatch(window_start: datetime, window_end: datetime) -> list
         last_notified_at = doc.get("last_notified_at")
         results.append({
             "email_id": doc.get("email_id", ""),
+            "user_email": doc.get("user_email", ""),
             "task": doc.get("task", "No task"),
             "deadline": doc.get("deadline", "Not specified"),
             "deadline_at": deadline_at.isoformat() if deadline_at else "",
@@ -250,12 +284,14 @@ def get_tasks_for_dispatch(window_start: datetime, window_end: datetime) -> list
     return results
 
 
-def get_tasks_with_custom_reminders() -> list[dict]:
+def get_tasks_with_custom_reminders(user_email: str | None = None) -> list[dict]:
     query = {
         "is_deleted": {"$ne": True},
         "done": {"$ne": True},
         "custom_reminders": {"$exists": True, "$ne": []},
     }
+    if user_email:
+        query["user_email"] = user_email
     docs = list(tasks_collection.find(query, {"_id": 0}).sort("deadline_at", 1))
     results: list[dict] = []
     for doc in docs:
@@ -265,6 +301,7 @@ def get_tasks_with_custom_reminders() -> list[dict]:
         last_notified_at = doc.get("last_notified_at")
         results.append({
             "email_id": doc.get("email_id", ""),
+            "user_email": doc.get("user_email", ""),
             "task": doc.get("task", "No task"),
             "deadline": doc.get("deadline", "Not specified"),
             "deadline_at": deadline_at.isoformat() if deadline_at else "",
@@ -277,3 +314,13 @@ def get_tasks_with_custom_reminders() -> list[dict]:
             "last_notified_at": last_notified_at.isoformat() if last_notified_at else "",
         })
     return results
+
+
+def update_task_user_email(email_id: str, user_email: str) -> bool:
+    if not email_id or not user_email:
+        return False
+    result = tasks_collection.update_one(
+        {"email_id": email_id, "user_email": {"$in": [None, ""]}},
+        {"$set": {"user_email": user_email}},
+    )
+    return result.matched_count > 0
