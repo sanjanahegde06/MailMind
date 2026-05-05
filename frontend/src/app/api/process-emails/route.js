@@ -20,6 +20,7 @@ export async function GET(request) {
         method: "GET",
         headers: {
           Authorization: `Bearer ${session.accessToken}`,
+          "x-user-email": session?.user?.email || "",
         },
         cache: "no-store",
       },

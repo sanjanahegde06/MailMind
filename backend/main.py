@@ -652,6 +652,7 @@ def process_emails(
     max_results: int = Query(default=12, ge=1, le=20),
     batch_size: int = Query(default=5, ge=1, le=10),
     authorization: str | None = Header(default=None),
+    user_email: str | None = Header(default=None, alias="x-user-email"),
 ) -> dict[str, int | bool | str]:
     access_token = _parse_bearer_token(authorization)
     if not access_token:
@@ -665,18 +666,20 @@ def process_emails(
             "message": "Missing Gmail access token. Please sign in again.",
         }
 
-    try:
-        user_email = _fetch_user_email_from_gmail(access_token)
-    except requests.RequestException:
-        return {
-            "requested": 0,
-            "pending_new": 0,
-            "processed_new": 0,
-            "skipped_existing": 0,
-            "failed": 0,
-            "rate_limited": False,
-            "message": "Failed to identify Gmail user. Please reconnect Google account.",
-        }
+    user_email = (user_email or "").strip()
+    if not user_email:
+        try:
+            user_email = _fetch_user_email_from_gmail(access_token)
+        except requests.RequestException:
+            return {
+                "requested": 0,
+                "pending_new": 0,
+                "processed_new": 0,
+                "skipped_existing": 0,
+                "failed": 0,
+                "rate_limited": False,
+                "message": "Failed to identify Gmail user. Please reconnect Google account.",
+            }
 
     if not user_email:
         return {
@@ -1059,50 +1062,61 @@ def push_dispatch(
     now = datetime.now(timezone.utc)
     window_start = now - timedelta(minutes=PUSH_REMINDER_GRACE_SEC // 60)
     window_end = now + timedelta(hours=24, minutes=PUSH_REMINDER_GRACE_SEC // 60)
-    tasks = get_tasks_for_dispatch(window_start, window_end, user_email or None)
-    custom_tasks = get_tasks_with_custom_reminders(user_email or None)
-    if custom_tasks:
-        seen = {str(task.get("email_id") or "").strip() for task in tasks}
-        tasks.extend([task for task in custom_tasks if str(task.get("email_id") or "").strip() not in seen])
     sent = 0
 
-    for task in tasks:
-        schedule = _build_task_reminder_schedule(task)
-        for reminder in schedule:
-            reminder_time: datetime = reminder["time"]
-            grace_window = PUSH_IMMEDIATE_GRACE_SEC if reminder["id"].startswith("immediate:") else PUSH_REMINDER_GRACE_SEC
-            if reminder_time > now:
-                continue
-            if (now - reminder_time).total_seconds() > grace_window:
-                continue
+    subscriptions_by_user: dict[str, list[dict]] = {}
+    for subscription in subscriptions:
+        sub_user = str(subscription.get("user_email") or "").strip()
+        if not sub_user:
+            continue
+        subscriptions_by_user.setdefault(sub_user, []).append(subscription)
 
-            event_id = f"push:{reminder['id']}"
-            if is_push_event_sent(event_id):
-                continue
+    for sub_user, user_subscriptions in subscriptions_by_user.items():
+        tasks = get_tasks_for_dispatch(window_start, window_end, sub_user)
+        custom_tasks = get_tasks_with_custom_reminders(sub_user)
+        if custom_tasks:
+            seen = {str(task.get("email_id") or "").strip() for task in tasks}
+            tasks.extend([task for task in custom_tasks if str(task.get("email_id") or "").strip() not in seen])
 
-            if not _is_notification_worthy(task):
-                continue
-
-            task_title = str(task.get("task") or "Task reminder")
-            deadline = str(task.get("deadline") or "Not specified")
-            email_id = str(task.get("email_id") or "").strip()
-            target_url = f"/dashboard/email/{email_id}" if email_id else "/tasks"
-            delivered = 0
-            for subscription in subscriptions:
-                local_deadline = _format_time_for_timezone(reminder_time, subscription.get("timezone"))
-                payload_data = _build_task_notification_payload(
-                    task,
-                    "MailMind Task Reminder",
-                    f"Task: {task_title}\nDue: {local_deadline}",
-                    target_url,
+        for task in tasks:
+            schedule = _build_task_reminder_schedule(task)
+            for reminder in schedule:
+                reminder_time: datetime = reminder["time"]
+                grace_window = (
+                    PUSH_IMMEDIATE_GRACE_SEC if reminder["id"].startswith("immediate:") else PUSH_REMINDER_GRACE_SEC
                 )
-                if _send_web_push(subscription, payload_data):
-                    delivered += 1
+                if reminder_time > now:
+                    continue
+                if (now - reminder_time).total_seconds() > grace_window:
+                    continue
 
-            if delivered:
-                mark_push_event_sent(event_id)
-                update_task_last_notified(email_id, now)
-                sent += delivered
+                event_id = f"push:{sub_user}:{reminder['id']}"
+                if is_push_event_sent(event_id):
+                    continue
+
+                if not _is_notification_worthy(task):
+                    continue
+
+                task_title = str(task.get("task") or "Task reminder")
+                deadline = str(task.get("deadline") or "Not specified")
+                email_id = str(task.get("email_id") or "").strip()
+                target_url = f"/dashboard/email/{email_id}" if email_id else "/tasks"
+                delivered = 0
+                for subscription in user_subscriptions:
+                    local_deadline = _format_time_for_timezone(reminder_time, subscription.get("timezone"))
+                    payload_data = _build_task_notification_payload(
+                        task,
+                        "MailMind Task Reminder",
+                        f"Task: {task_title}\nDue: {local_deadline}",
+                        target_url,
+                    )
+                    if _send_web_push(subscription, payload_data):
+                        delivered += 1
+
+                if delivered:
+                    mark_push_event_sent(event_id)
+                    update_task_last_notified(email_id, now)
+                    sent += delivered
 
     return {"sent": sent}
 
