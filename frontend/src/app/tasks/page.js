@@ -335,12 +335,22 @@ export default function TasksPage() {
 
     try {
       setSavingReminders(true);
+      let nextReminders = Array.from(reminderTask.custom_reminders || []);
+      if (nextReminders.length === 0) {
+        const candidate = computeCandidateReminder();
+        if (!candidate) {
+          throw new Error("Pick a date and time, then tap Add Reminder or Save again.");
+        }
+        nextReminders = [candidate.toISOString()];
+        setReminderTask((previous) => (previous ? { ...previous, custom_reminders: nextReminders } : previous));
+      }
+
       const response = await fetch(`/api/tasks/${encodeURIComponent(emailId)}/reminders`, {
         method: "PATCH",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ reminders: reminderTask.custom_reminders || [] }),
+        body: JSON.stringify({ reminders: nextReminders }),
       });
 
       if (!response.ok) {
@@ -349,7 +359,7 @@ export default function TasksPage() {
 
       setTasks((previous) =>
         previous.map((item) =>
-          item.email_id === emailId ? { ...item, custom_reminders: reminderTask.custom_reminders || [] } : item,
+          item.email_id === emailId ? { ...item, custom_reminders: nextReminders } : item,
         ),
       );
       closeReminderEditor();
