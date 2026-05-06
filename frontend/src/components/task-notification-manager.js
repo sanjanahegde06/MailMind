@@ -43,12 +43,10 @@ function saveSentReminders(value) {
 }
 
 function buildReminderSchedule(task) {
-  const deadlineAt = parseDate(task.deadline_at);
-  if (!deadlineAt || task.done) return [];
+  if (task.done) return [];
 
   const schedule = [];
   const customReminders = Array.isArray(task.custom_reminders) ? task.custom_reminders : [];
-  const createdAt = parseDate(task.created_at);
 
   if (customReminders.length > 0) {
     for (const reminder of customReminders) {
@@ -61,6 +59,11 @@ function buildReminderSchedule(task) {
     }
     return schedule;
   }
+
+  const deadlineAt = parseDate(task.deadline_at);
+  if (!deadlineAt) return [];
+
+  const createdAt = parseDate(task.created_at);
 
   const oneDay = new Date(deadlineAt.getTime() - 24 * 60 * 60 * 1000);
   const oneHour = new Date(deadlineAt.getTime() - 60 * 60 * 1000);

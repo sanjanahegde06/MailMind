@@ -181,13 +181,11 @@ def _is_same_day(left: datetime, right: datetime) -> bool:
 
 
 def _build_task_reminder_schedule(task: dict) -> list[dict[str, Any]]:
-    deadline_at = _parse_iso_datetime(str(task.get("deadline_at", "")).strip())
-    if not deadline_at or task.get("done"):
+    if task.get("done"):
         return []
 
     schedule: list[dict[str, Any]] = []
     custom_reminders = task.get("custom_reminders") or []
-    created_at = _parse_iso_datetime(str(task.get("created_at", "")).strip())
 
     if custom_reminders:
         for reminder in custom_reminders:
@@ -199,6 +197,12 @@ def _build_task_reminder_schedule(task: dict) -> list[dict[str, Any]]:
                 "time": reminder_time,
             })
         return schedule
+
+    deadline_at = _parse_iso_datetime(str(task.get("deadline_at", "")).strip())
+    if not deadline_at:
+        return []
+
+    created_at = _parse_iso_datetime(str(task.get("created_at", "")).strip())
 
     one_day = deadline_at - timedelta(days=1)
     one_hour = deadline_at - timedelta(hours=1)
