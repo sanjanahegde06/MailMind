@@ -1189,7 +1189,7 @@ def _summarize_with_gemini(subject: str, body_text: str) -> dict | None:
             "gemini-1.5-flash-8b-latest",
             "gemini-2.0-flash",
             "gemini-2.0-flash-lite",
-            "gemini-1.5-pro",
+            "gemini-pro",
         ]
 
         merged: list[str] = []
@@ -1330,7 +1330,7 @@ Body:
 
 Reply:"""
 
-    last_error_message = "Groq request failed"
+    all_errors = []
     last_status_code = None
 
     for model_name in candidate_models:
@@ -1367,9 +1367,10 @@ Reply:"""
                 except Exception:
                     error_message = res.text
 
-                last_error_message = (error_message or "Groq request failed").strip()
+                err_msg = (error_message or "Groq request failed").strip()
+                all_errors.append(f"{model_name}: {err_msg}")
                 last_status_code = res.status_code
-                logger.warning("[Groq] Model %s failed: %s", model_name, last_error_message)
+                logger.warning("[Groq] Model %s failed: %s", model_name, err_msg)
                 continue
 
             data = res.json()
@@ -1390,19 +1391,20 @@ Reply:"""
                     logger.info("[Groq] Success (fallback)! Generated %s chars", len(reply))
                     return {"ok": True, "reply": reply, "error_type": "", "error_message": "", "status_code": res.status_code}
 
-            last_error_message = "Groq returned empty reply"
+            all_errors.append(f"{model_name}: empty reply")
             last_status_code = res.status_code
         except Exception as exc:
-            last_error_message = str(exc) or "Groq request failed"
+            all_errors.append(f"{model_name}: {str(exc)}")
             last_status_code = None
-            logger.warning("[Groq] Exception for model %s: %s", model_name, last_error_message)
+            logger.warning("[Groq] Exception for model %s: %s", model_name, str(exc))
             continue
 
+    combined_err = " | ".join(all_errors)
     return {
         "ok": False,
         "reply": "",
-        "error_type": _classify_ai_error(last_error_message, last_status_code),
-        "error_message": last_error_message,
+        "error_type": _classify_ai_error(all_errors[-1] if all_errors else "unknown", last_status_code),
+        "error_message": combined_err,
         "status_code": last_status_code,
     }
 
@@ -1425,16 +1427,17 @@ Body:
 
 Reply:"""
 
-        last_error = "Gemini returned empty reply"
+        all_errors = []
         # try candidate models
-        for model in [GEMINI_MODEL, "gemini-1.5-flash", "gemini-1.5-flash-latest", "gemini-2.0-flash", "gemini-1.5-pro"]:
+        for model in [GEMINI_MODEL, "gemini-1.5-flash", "gemini-1.5-flash-latest", "gemini-2.0-flash", "gemini-pro"]:
             try:
                 m = genai.GenerativeModel(model)
                 response = m.generate_content(prompt)
                 try:
                     response_text = (getattr(response, "text", "") or "").strip()
                 except ValueError as ve:
-                    last_error = f"Gemini response blocked or invalid: {ve}"
+                    err = f"{model} response blocked or invalid: {ve}"
+                    all_errors.append(err)
                     logger.warning("Gemini text accessor failed for %s: %s", model, ve)
                     continue
 
@@ -1443,12 +1446,13 @@ Reply:"""
                         response_text = response_text.split("```", 1)[1].rsplit("```", 1)[0].strip()
                     return {"ok": True, "reply": response_text, "error_type": "", "error_message": "", "status_code": None}
                 else:
-                    last_error = f"Gemini model {model} returned empty text"
+                    all_errors.append(f"{model} returned empty text")
             except Exception as e:
-                last_error = str(e)
+                all_errors.append(f"{model}: {str(e)}")
                 logger.warning("Gemini reply generation failed for %s: %s", model, e)
 
-        return {"ok": False, "reply": "", "error_type": "empty", "error_message": last_error, "status_code": None}
+        combined_err = " | ".join(all_errors)
+        return {"ok": False, "reply": "", "error_type": "empty", "error_message": combined_err, "status_code": None}
     except Exception as exc:
         error_message = str(exc) or "Gemini generation failed"
         return {
