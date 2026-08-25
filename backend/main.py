@@ -1429,7 +1429,7 @@ Reply:"""
 
         all_errors = []
         # try candidate models
-        for model in [GEMINI_MODEL, "gemini-1.5-flash", "gemini-1.5-flash-latest", "gemini-2.0-flash", "gemini-pro"]:
+        for model in [GEMINI_MODEL, "gemini-pro", "gemini-1.5-flash", "gemini-1.5-pro"]:
             try:
                 m = genai.GenerativeModel(model)
                 response = m.generate_content(prompt)
@@ -1512,9 +1512,9 @@ def generate_reply(data: dict = Body(...)) -> dict:
 
     combined_error = "Groq: {g_type} ({g_msg}) | Gemini: {m_type} ({m_msg})".format(
         g_type=groq_result.get("error_type"),
-        g_msg=(groq_result.get("error_message") or "Unknown error")[:140],
+        g_msg=(groq_result.get("error_message") or "Unknown error"),
         m_type=gemini_result.get("error_type"),
-        m_msg=(gemini_result.get("error_message") or "Unknown error")[:140],
+        m_msg=(gemini_result.get("error_message") or "Unknown error"),
     )
     raise HTTPException(status_code=502, detail=f"AI reply generation failed. {combined_error}")
 
