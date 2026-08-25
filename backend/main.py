@@ -1310,7 +1310,12 @@ def _generate_with_groq(subject: str, body_text: str, tone: str | None = None) -
         return {"ok": False, "reply": "", "error_type": "auth", "error_message": "Missing GROQ_API_KEY", "status_code": None}
 
     groq_url = "https://api.groq.com/openai/v1/chat/completions"
-    model_name = os.getenv("GROQ_MODEL", "llama-3.1-8b-instant").strip() or "llama-3.1-8b-instant"
+    preferred_model = os.getenv("GROQ_MODEL", "llama3-8b-8192").strip() or "llama3-8b-8192"
+    
+    candidate_models = []
+    for m in [preferred_model, "llama3-8b-8192", "llama-3.3-70b-versatile", "mixtral-8x7b-32768", "gemma2-9b-it"]:
+        if m not in candidate_models:
+            candidate_models.append(m)
 
     tone_hint = _tone_guidelines(tone)
     prompt = f"""Write an email reply based on the following message.
@@ -1325,82 +1330,81 @@ Body:
 
 Reply:"""
 
-    try:
-        logger.info("[Groq] Sending request...")
-        res = requests.post(
-            groq_url,
-            headers={
-                "Authorization": f"Bearer {groq_key}",
-                "Content-Type": "application/json",
-            },
-            json={
-                "model": model_name,
-                "messages": [
-                    {"role": "system", "content": "You are a helpful email reply assistant."},
-                    {"role": "user", "content": prompt},
-                ],
-                "max_tokens": 512,
-                "temperature": 0.7,
-            },
-            timeout=20,
-        )
+    last_error_message = "Groq request failed"
+    last_status_code = None
 
-        logger.info("[Groq] Response status: %s", res.status_code)
-        if not res.ok:
-            error_message = ""
-            try:
-                error_json = res.json()
-                error_message = (
-                    error_json.get("error", {}).get("message")
-                    if isinstance(error_json, dict)
-                    else ""
-                ) or res.text
-            except Exception:
-                error_message = res.text
+    for model_name in candidate_models:
+        try:
+            logger.info("[Groq] Sending request for model %s...", model_name)
+            res = requests.post(
+                groq_url,
+                headers={
+                    "Authorization": f"Bearer {groq_key}",
+                    "Content-Type": "application/json",
+                },
+                json={
+                    "model": model_name,
+                    "messages": [
+                        {"role": "system", "content": "You are a helpful email reply assistant."},
+                        {"role": "user", "content": prompt},
+                    ],
+                    "max_tokens": 512,
+                    "temperature": 0.7,
+                },
+                timeout=20,
+            )
 
-            error_message = (error_message or "Groq request failed").strip()
-            return {
-                "ok": False,
-                "reply": "",
-                "error_type": _classify_ai_error(error_message, res.status_code),
-                "error_message": error_message,
-                "status_code": res.status_code,
-            }
+            logger.info("[Groq] Response status: %s", res.status_code)
+            if not res.ok:
+                error_message = ""
+                try:
+                    error_json = res.json()
+                    error_message = (
+                        error_json.get("error", {}).get("message")
+                        if isinstance(error_json, dict)
+                        else ""
+                    ) or res.text
+                except Exception:
+                    error_message = res.text
 
-        data = res.json()
-        if isinstance(data, dict):
-            choices = data.get("choices", [])
-            if choices and isinstance(choices, list):
-                choice = choices[0]
-                message = choice.get("message", {})
-                if isinstance(message, dict):
-                    reply = message.get("content", "").strip()
-                    if reply:
-                        logger.info("[Groq] Success! Generated %s chars", len(reply))
-                        return {"ok": True, "reply": reply, "error_type": "", "error_message": "", "status_code": res.status_code}
+                last_error_message = (error_message or "Groq request failed").strip()
+                last_status_code = res.status_code
+                logger.warning("[Groq] Model %s failed: %s", model_name, last_error_message)
+                continue
 
-            reply = data.get("reply") or data.get("text") or data.get("generated_text")
-            if reply:
-                reply = str(reply).strip()
-                logger.info("[Groq] Success (fallback)! Generated %s chars", len(reply))
-                return {"ok": True, "reply": reply, "error_type": "", "error_message": "", "status_code": res.status_code}
+            data = res.json()
+            if isinstance(data, dict):
+                choices = data.get("choices", [])
+                if choices and isinstance(choices, list):
+                    choice = choices[0]
+                    message = choice.get("message", {})
+                    if isinstance(message, dict):
+                        reply = message.get("content", "").strip()
+                        if reply:
+                            logger.info("[Groq] Success! Generated %s chars", len(reply))
+                            return {"ok": True, "reply": reply, "error_type": "", "error_message": "", "status_code": res.status_code}
 
-        return {
-            "ok": False,
-            "reply": "",
-            "error_type": "empty",
-            "error_message": "Groq returned empty reply",
-            "status_code": res.status_code,
-        }
-    except Exception as exc:
-        error_message = str(exc) or "Groq request failed"
-        return {
-            "ok": False,
-            "reply": "",
-            "error_type": _classify_ai_error(error_message, None),
-            "error_message": error_message,
-            "status_code": None,
-        }
+                reply = data.get("reply") or data.get("text") or data.get("generated_text")
+                if reply:
+                    reply = str(reply).strip()
+                    logger.info("[Groq] Success (fallback)! Generated %s chars", len(reply))
+                    return {"ok": True, "reply": reply, "error_type": "", "error_message": "", "status_code": res.status_code}
+
+            last_error_message = "Groq returned empty reply"
+            last_status_code = res.status_code
+        except Exception as exc:
+            last_error_message = str(exc) or "Groq request failed"
+            last_status_code = None
+            logger.warning("[Groq] Exception for model %s: %s", model_name, last_error_message)
+            continue
+
+    return {
+        "ok": False,
+        "reply": "",
+        "error_type": _classify_ai_error(last_error_message, last_status_code),
+        "error_message": last_error_message,
+        "status_code": last_status_code,
+    }
 
 
 def _generate_with_gemini_reply(subject: str, body_text: str, tone: str | None = None) -> dict:
@@ -1421,20 +1425,30 @@ Body:
 
 Reply:"""
 
+        last_error = "Gemini returned empty reply"
         # try candidate models
         for model in [GEMINI_MODEL, "gemini-1.5-flash", "gemini-1.5-flash-latest", "gemini-2.0-flash", "gemini-1.5-pro"]:
             try:
                 m = genai.GenerativeModel(model)
                 response = m.generate_content(prompt)
-                response_text = (getattr(response, "text", "") or "").strip()
+                try:
+                    response_text = (getattr(response, "text", "") or "").strip()
+                except ValueError as ve:
+                    last_error = f"Gemini response blocked or invalid: {ve}"
+                    logger.warning("Gemini text accessor failed for %s: %s", model, ve)
+                    continue
+
                 if response_text:
                     if "```" in response_text:
                         response_text = response_text.split("```", 1)[1].rsplit("```", 1)[0].strip()
                     return {"ok": True, "reply": response_text, "error_type": "", "error_message": "", "status_code": None}
+                else:
+                    last_error = f"Gemini model {model} returned empty text"
             except Exception as e:
+                last_error = str(e)
                 logger.warning("Gemini reply generation failed for %s: %s", model, e)
 
-        return {"ok": False, "reply": "", "error_type": "empty", "error_message": "Gemini returned empty reply", "status_code": None}
+        return {"ok": False, "reply": "", "error_type": "empty", "error_message": last_error, "status_code": None}
     except Exception as exc:
         error_message = str(exc) or "Gemini generation failed"
         return {
