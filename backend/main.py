@@ -1313,7 +1313,7 @@ def _generate_with_groq(subject: str, body_text: str, tone: str | None = None) -
     preferred_model = os.getenv("GROQ_MODEL", "llama3-8b-8192").strip() or "llama3-8b-8192"
     
     candidate_models = []
-    for m in [preferred_model, "llama3-8b-8192", "llama-3.3-70b-versatile", "mixtral-8x7b-32768", "gemma2-9b-it"]:
+    for m in [preferred_model, "llama3-8b-8192", "llama-3.3-70b-versatile", "mixtral-8x7b-32768"]:
         if m not in candidate_models:
             candidate_models.append(m)
 
