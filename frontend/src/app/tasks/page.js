@@ -396,7 +396,7 @@ export default function TasksPage() {
     <section className="mx-auto w-full max-w-6xl px-3 py-4 sm:px-4 sm:py-6 md:px-6 md:py-8">
       <div className="mb-4 rounded-2xl border border-cyan-300/25 bg-gradient-to-r from-indigo-700/75 via-sky-700/75 to-cyan-600/70 p-4 sm:rounded-3xl sm:p-6 md:mb-6 md:p-8 text-white shadow-[0_16px_50px_rgba(21,94,239,0.28)]">
         <h1 className="text-2xl font-semibold sm:text-3xl">Important Tasks</h1>
-        <p className="mt-1 text-xs text-cyan-50/90 sm:mt-2 sm:text-sm">Structured tasks extracted from your emails by AI.</p>
+        <p className="mt-1 text-xs text-cyan-50/90 sm:mt-2 sm:text-sm">Tasks extracted from your emails.</p>
         <div className="mt-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-3 md:mt-4">
           <label className="text-xs text-cyan-50/90 sm:text-sm" htmlFor="sortPriority">
             Sort by priority
