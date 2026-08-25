@@ -1160,44 +1160,45 @@ def _build_fallback_summary(subject: str, body_text: str) -> dict:
     }
 
 
+def _get_gemini_candidate_models() -> list[str]:
+    discovered: list[str] = []
+    try:
+        for item in genai.list_models():
+            methods = getattr(item, "supported_generation_methods", []) or []
+            if "generateContent" not in methods:
+                continue
+            name = str(getattr(item, "name", "")).strip()
+            if name.startswith("models/"):
+                name = name.removeprefix("models/")
+            if name:
+                discovered.append(name)
+    except Exception as exc:
+        logger.warning("Gemini model discovery failed: %s", exc)
+
+    preferred = [
+        GEMINI_MODEL,
+        "gemini-1.5-flash",
+        "gemini-2.5-flash",
+        "gemini-1.5-flash-latest",
+        "gemini-1.5-flash-8b",
+        "gemini-1.5-flash-8b-latest",
+        "gemini-2.0-flash",
+        "gemini-2.0-flash-lite",
+        "gemini-pro",
+    ]
+
+    merged: list[str] = []
+    for name in discovered + preferred:
+        normalized = (name or "").strip().removeprefix("models/")
+        if normalized and normalized not in merged:
+            merged.append(normalized)
+    return merged
+
+
 def _summarize_with_gemini(subject: str, body_text: str) -> dict | None:
     """Attempt to summarize email using Gemini API."""
     if not GEMINI_API_KEY:
         return None
-
-    def _candidate_model_names() -> list[str]:
-        discovered: list[str] = []
-        try:
-            for item in genai.list_models():
-                methods = getattr(item, "supported_generation_methods", []) or []
-                if "generateContent" not in methods:
-                    continue
-                name = str(getattr(item, "name", "")).strip()
-                if name.startswith("models/"):
-                    name = name.removeprefix("models/")
-                if name:
-                    discovered.append(name)
-        except Exception as exc:
-            logger.warning("Gemini model discovery failed: %s", exc)
-
-        preferred = [
-            GEMINI_MODEL,
-            "gemini-1.5-flash",
-            "gemini-2.5-flash",
-            "gemini-1.5-flash-latest",
-            "gemini-1.5-flash-8b",
-            "gemini-1.5-flash-8b-latest",
-            "gemini-2.0-flash",
-            "gemini-2.0-flash-lite",
-            "gemini-pro",
-        ]
-
-        merged: list[str] = []
-        for name in discovered + preferred:
-            normalized = (name or "").strip().removeprefix("models/")
-            if normalized and normalized not in merged:
-                merged.append(normalized)
-        return merged
 
     try:
         genai.configure(api_key=GEMINI_API_KEY)
@@ -1219,7 +1220,7 @@ Return ONLY valid JSON (no markdown, no extra text) with this exact structure:
 
 If a section has no relevant information, use empty string for overview or empty array for lists."""
 
-        for model_name in _candidate_model_names():
+        for model_name in _get_gemini_candidate_models():
             try:
                 model = genai.GenerativeModel(model_name)
                 response = model.generate_content(
@@ -1313,7 +1314,8 @@ def _generate_with_groq(subject: str, body_text: str, tone: str | None = None) -
     preferred_model = os.getenv("GROQ_MODEL", "llama3-8b-8192").strip() or "llama3-8b-8192"
     
     candidate_models = []
-    for m in [preferred_model, "llama3-8b-8192", "llama-3.3-70b-versatile", "mixtral-8x7b-32768"]:
+    # Add llama-3.1-8b-instant and mixtral-8x7b-32768 as fallbacks just in case
+    for m in [preferred_model, "llama-3.1-8b-instant", "llama3-8b-8192", "llama-3.3-70b-versatile", "mixtral-8x7b-32768"]:
         if m not in candidate_models:
             candidate_models.append(m)
 
@@ -1429,7 +1431,7 @@ Reply:"""
 
         all_errors = []
         # try candidate models
-        for model in [GEMINI_MODEL, "gemini-pro", "gemini-1.5-flash", "gemini-1.5-pro"]:
+        for model in _get_gemini_candidate_models():
             try:
                 m = genai.GenerativeModel(model)
                 response = m.generate_content(prompt)
