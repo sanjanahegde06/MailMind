@@ -120,6 +120,8 @@ _SPLIT_RE = re.compile(r"[\n\r\.\!\?]+")
 
 def _normalize_spaces(text: str) -> str:
     value = (text or "")
+    if len(value) > 20000:
+        value = value[:20000]
     value = re.sub(r"<style[\s\S]*?</style>", " ", value, flags=re.IGNORECASE)
     value = re.sub(r"<script[\s\S]*?</script>", " ", value, flags=re.IGNORECASE)
     value = re.sub(r"<[^>]+>", " ", value)

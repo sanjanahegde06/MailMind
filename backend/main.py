@@ -1182,10 +1182,14 @@ def _summarize_with_gemini(subject: str, body_text: str) -> dict | None:
 
         preferred = [
             GEMINI_MODEL,
+            "gemini-1.5-flash",
+            "gemini-2.5-flash",
             "gemini-1.5-flash-latest",
+            "gemini-1.5-flash-8b",
             "gemini-1.5-flash-8b-latest",
             "gemini-2.0-flash",
             "gemini-2.0-flash-lite",
+            "gemini-1.5-pro",
         ]
 
         merged: list[str] = []
@@ -1418,7 +1422,7 @@ Body:
 Reply:"""
 
         # try candidate models
-        for model in [GEMINI_MODEL, "gemini-1.5-flash-latest", "gemini-2.0-flash"]:
+        for model in [GEMINI_MODEL, "gemini-1.5-flash", "gemini-1.5-flash-latest", "gemini-2.0-flash", "gemini-1.5-pro"]:
             try:
                 m = genai.GenerativeModel(model)
                 response = m.generate_content(prompt)

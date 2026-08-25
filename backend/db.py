@@ -7,13 +7,13 @@ from pymongo.errors import DuplicateKeyError
 
 load_dotenv()
 
-MONGODB_URI = os.getenv("MONGODB_URI", "")
+MONGODB_URI = os.getenv("MONGODB_URI", "").strip().strip('"').strip("'")
 MONGODB_DB = os.getenv("MONGODB_DB", "mailmind")
 MONGODB_COLLECTION = os.getenv("MONGODB_COLLECTION", "tasks")
 MONGODB_PUSH_COLLECTION = os.getenv("MONGODB_PUSH_COLLECTION", "push_subscriptions")
 MONGODB_PUSH_EVENTS_COLLECTION = os.getenv("MONGODB_PUSH_EVENTS_COLLECTION", "push_events")
 
-if not MONGODB_URI:
+if not MONGODB_URI or MONGODB_URI in ["null", "undefined"]:
     raise RuntimeError("MONGODB_URI is not configured. Add it to backend/.env")
 
 mongo_client = MongoClient(MONGODB_URI)
